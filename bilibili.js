@@ -1,8 +1,93 @@
 /**************************
-显示豆瓣评分
+哔哩哔哩, 港澳台番剧自动切换地区 & 显示豆瓣评分
+如需禁用豆瓣评分或策略通知, 可前往BoxJs设置.
+BoxJs订阅地址: https://raw.githubusercontent.com/NobyDa/Script/master/NobyDa_BoxJs.json
+Author: @NobyDa
+****************************
+脚本取自@NobyDa的库，仅为了方便小白配置默认使用而更改了策略组名称
+作者库：https://raw.githubusercontent.com/NobyDa
 ***************************/
 
 let $ = nobyda();
+
+async function SwitchRegion(play) {
+	const Group = $.read('BiliArea_Policy') || '港台番剧'; //Your blibli policy group name.
+	const CN = $.read('BiliArea_CN') || 'DIRECT'; //Your China sub-policy name.
+	const TW = $.read('BiliArea_TW') || '台湾节点'; //Your Taiwan sub-policy name.
+	const HK = $.read('BiliArea_HK') || '香港节点'; //Your HongKong sub-policy name.
+	const DF = $.read('BiliArea_DF') || 'DIRECT'; //Sub-policy name used after region is blocked(e.g. url 404)
+	const off = $.read('BiliArea_disabled') || ''; //WiFi blacklist(disable region change), separated by commas.
+	const current = await $.getPolicy(Group);
+	const area = (() => {
+		let select;
+		if (/\u50c5[\u4e00-\u9fa5]+\u6e2f|%20%E6%B8%AF&/.test(play)) {
+			const test = /\u50c5[\u4e00-\u9fa5]+\u53f0/.test(play);
+			if (current != HK && (current == TW && test ? 0 : 1)) select = HK;
+		} else if (/\u50c5[\u4e00-\u9fa5]+\u53f0|%20%E5%8F%B0&/.test(play)) {
+			if (current != TW) select = TW;
+		} else if (play === -404) {
+			if (current != DF) select = DF;
+		} else if (current != CN) {
+			select = CN;
+		}
+		if ($.isQuanX && current === 'direct' && select === 'DIRECT') {
+			select = null; //avoid loops in some cases
+		}
+		return select;
+	})()
+
+	if (area && !off.includes($.ssid || undefined)) {
+		const change = await $.setPolicy(Group, area);
+		const notify = $.read('BiliAreaNotify') === 'false';
+		const msg = SwitchStatus(change, current, area);
+		if (!notify) {
+			$.notify((/^(http|-404)/.test(play) || !play) ? `` : play, ``, msg);
+		} else {
+			console.log(`${(/^(http|-404)/.test(play)||!play)?``:play}\n${msg}`);
+		}
+		if (change) {
+			return true;
+		}
+	}
+	return false;
+}
+
+function SwitchStatus(status, original, newPolicy) {
+	if (status && typeof original !== 'number') {
+		return `${original}  =>  ${newPolicy}  =>  🟢`;
+	} else if (original === 2) {
+		return `切换失败, 策略组名未填写或填写有误 ⚠️`
+	} else if (original === 3) {
+		return `切换失败, 不支持您的VPN应用版本 ⚠️`
+	} else if (status === 0) {
+		return `切换失败, 子策略名未填写或填写有误 ⚠️`
+	} else {
+		return `策略切换失败, 未知错误 ⚠️`
+	}
+}
+
+function EnvInfo() {
+	const url = $request.url;
+	if (typeof($response) !== 'undefined') {
+		const raw = JSON.parse($response.body || "{}");
+		const data = raw.data || raw.result || {};
+		const t1 = (data.series && data.series.series_title) || data.title;
+		const t2 = raw.code === -404 ? -404 : null;
+		SwitchRegion(t1 || t2)
+			.then(s => s ? $done({
+				status: $.isQuanX ? "HTTP/1.1 307" :307,
+				headers: {
+					Location: url
+				},
+				body: "{}"
+			}) : QueryRating(raw, data));
+	} else {
+		const res = {
+			url: url.replace(/%20(%E6%B8%AF|%E5%8F%B0|%E4%B8%AD)&/g, '&')
+		};
+		SwitchRegion(url).then(() => $done(res));
+	}
+}
 
 async function QueryRating(body, play) {
 	try {
