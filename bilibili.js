@@ -40,7 +40,7 @@ async function SwitchRegion(play) {
 	if (area && !off.includes($.ssid || undefined)) {
 		const change = await $.setPolicy(Group, area);
 		const notify = $.read('BiliAreaNotify') === 'false';
-		const msg = SwitchStatus(change, current, area);
+		
 		if (!notify) {
 			$.notify((/^(http|-404)/.test(play) || !play) ? `` : play, ``, msg);
 		} else {
