@@ -9,6 +9,7 @@ Author: @NobyDa
 ***************************/
 
 let $ = nobyda();
+let run = EnvInfo();
 
 async function SwitchRegion(play) {
 	const Group = $.read('BiliArea_Policy') || '港台番剧'; //Your blibli policy group name.
